@@ -1,20 +1,39 @@
 import json
-
-from jupyter_server.extension.handler import ExtensionHandlerMixin
 from jupyter_server.base.handlers import APIHandler
+from jupyter_server.utils import url_path_join
+from .list_ai_tools import list_ai_tools
 import tornado
+import importlib
 
 
-class PingHandler(ExtensionHandlerMixin, APIHandler):
-    # The following decorator should be present on all verb methods (head, get, post,
-    # patch, put, delete, options) to ensure only authorized user can request the
-    # Jupyter server
-    @property
-    def ping_response(self):
-        return self.settings["ping_response"]
 
+class ListExtensionsHandler(APIHandler):
     @tornado.web.authenticated
-    def get(self):
-        self.finish(json.dumps({
-            "ping_response": self.ping_response
-        }))
+    async def get(self):
+        extension_names = list(self.serverapp.extension_manager.extensions.keys())
+        self.finish(json.dumps({"extensions": extension_names}))
+        return
+
+
+
+class ListToolInfoHandler(APIHandler):
+    @tornado.web.authenticated
+    async def get(self):
+        raw_tools = list_ai_tools(self.serverapp.extension_manager)
+        safe_tools = {}
+
+        for ext in raw_tools:
+            if isinstance(ext, dict):
+                for tool_name, tool_info in ext.items():
+                    if isinstance(tool_info, dict):
+                        filtered_info = {
+                            k: v for k, v in tool_info.items() if k != "callable"
+                        }
+                        if tool_name not in safe_tools:
+                            safe_tools[tool_name] = filtered_info
+            elif isinstance(ext, list):
+                # Optional: handle if `tools()` returns a list
+                continue
+
+        self.finish(json.dumps({"discovered_tools": safe_tools}))
+

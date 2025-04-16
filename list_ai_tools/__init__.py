@@ -1,5 +1,7 @@
-"""A Jupyter Server extension."""
+"""An extension to aggregate and expose the tools from all available jupyter extensions."""
 from .extension import Extension
+from .list_ai_tools import list_ai_tools
+
 __version__ = "0.1.0"
 
 
