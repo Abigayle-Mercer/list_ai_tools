@@ -29,10 +29,7 @@ DEFAULT_TOOL_SCHEMA = {
 # Flat registry: tool_name -> callable
 CALLABLE_REGISTRY: Dict[str, Callable] = {}
 
-def list_ai_tools(
-    extension_manager,
-    schema: Optional[dict] = None,
-    return_metadata_only: bool = False
+def list_ai_tools(extension_manager, schema: Optional[dict] = None, return_metadata_only: bool = False
 ) -> List[Dict[str, Any]]:
     discovered_tools: List[Dict[str, Any]] = []
     validation_schema = schema if schema is not None else DEFAULT_TOOL_SCHEMA
