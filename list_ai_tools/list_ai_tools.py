@@ -15,6 +15,6 @@ def list_ai_tools(extension_manager) -> dict:
                     tools = func()
                     discovered_tools.append(tools)
         except Exception as e:
-            discovered_tools.append({ext_name: {"error": str(e)}})
+            print({ext_name: {"error": str(e)}})
 
     return discovered_tools
