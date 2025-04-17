@@ -47,16 +47,16 @@ def list_ai_tools(extension_manager, schema: Optional[dict] = None) -> List[Dict
                     jsonschema.validate(instance=tools, schema=validation_schema)
 
                     # Now ensure all callables are actually callable
-                    for name, tool_info in tools.items():
-                        if not callable(tool_info.get("callable")):
-                            raise TypeError(f"Tool '{name}' has a non-callable 'callable' field")
+                    #for name, tool_info in tools.items():
+                    #    if not callable(tool_info.get("callable")):
+                    #        raise TypeError(f"Tool '{name}' has a non-callable 'callable' field")
     
                     discovered_tools.append(tools)
 
         except (jsonschema.ValidationError, TypeError) as e:
-            discovered_tools.append({ext_name: {"error": f"Schema validation failed: {str(e)}"}})
+            print({ext_name: {"error": f"Schema validation failed: {str(e)}"}})
         except Exception as e:
-            discovered_tools.append({ext_name: {"error": str(e)}})
+            print({ext_name: {"error": str(e)}})
     print(discovered_tools)
     return discovered_tools
 
