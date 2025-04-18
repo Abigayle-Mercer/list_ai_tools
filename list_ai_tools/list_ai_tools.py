@@ -44,13 +44,16 @@ def list_ai_tools(extension_manager, schema: Optional[dict] = None) -> List[Dict
                     tools = func()
                     print(tools)
                     # Validate full structure (including presence of callable)
-                    jsonschema.validate(instance=tools, schema=validation_schema)
-
+                    # for tool_obj in tools.values():
+                    #    jsonschema.validate(instance=tool_obj, schema=validation_schema)
+                    #jsonschema.validate(instance=tools, schema=validation_schema)
                     # Now ensure all callables are actually callable
                     #for name, tool_info in tools.items():
                     #    if not callable(tool_info.get("callable")):
                     #        raise TypeError(f"Tool '{name}' has a non-callable 'callable' field")
     
+                    for name, tool_obj in tools.items():
+                        jsonschema.validate(instance=tool_obj, schema=validation_schema)
                     discovered_tools.append(tools)
 
         except (jsonschema.ValidationError, TypeError) as e:
