@@ -4,34 +4,6 @@ from typing import Any, Dict, Optional, List, Callable, Tuple
 import jsonschema
 
 
-# to do 
-
-# - https://jupyter-server.readthedocs.io/en/latest/developers/extensions.html#distributing-a-server-extension
-
-
-# Minimal schema compatible with OpenAI function calling and LangChain-style tools
-DEFAULT_TOOL_SCHEMA = { # this needs to be MCP 
-    "type": "object",
-    "patternProperties": {
-        "^[a-zA-Z_][a-zA-Z0-9_]*$": {
-            "type": "object",
-            "properties": {
-                "description": {"type": "string"},
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "type": {"type": "string", "enum": ["object"]},
-                        "properties": {"type": "object"},
-                        "required": {"type": "array", "items": {"type": "string"}}
-                    },
-                    "required": ["type", "properties"]
-                }
-            },
-            "required": ["description", "parameters"]
-        }
-    }
-}
-
 MCP_TOOL_SCHEMA = {
     "type": "object",
     "properties": {
@@ -99,9 +71,6 @@ def list_ai_tools(extension_manager, schema: Optional[dict] = None, return_metad
 
 # ---- Parsers for tool call formats ----
 
-def parse_standard_tool_call(call: Dict) -> Tuple[str, Dict]:
-    return call.get("name"), call.get("arguments", {})
-
 def parse_openai_tool_call(call: Dict) -> Tuple[str, Dict]:
     fn = call.get("function", {})
     name = fn.get("name")
@@ -111,24 +80,46 @@ def parse_openai_tool_call(call: Dict) -> Tuple[str, Dict]:
 def parse_anthropic_tool_call(call: Dict) -> Tuple[str, Dict]: 
     return call.get("name"), call.get("input", {})
 
+def parse_mcp_tool_call(call: Dict) -> Tuple[str, Dict]:
+    return call.get("name"), call.get("input", {})
+
+def parse_vercel_tool_call(call: Dict) -> Tuple[str, Dict]:
+    return call.get("name"), call.get("arguments", {})
+
+PARSER_MAP = {
+    "openai": parse_openai_tool_call,
+    "anthropic": parse_mcp_tool_call,
+    "mcp": parse_mcp_tool_call,
+    "vercel": parse_vercel_tool_call,
+}
+
+
 
 # keep writing these for popular LLMS 
 
 # ---- Main tool execution logic ----
 
-def run(tool_calls: List[Dict[str, Any]], parse_fn: Optional[Callable[[Dict], Tuple[str, Dict]]] = None) -> List[Any]:
+def run(
+    tool_calls: List[Dict[str, Any]],
+    parse_fn: Optional[str | Callable[[Dict], Tuple[str, Dict]]] = None
+) -> List[Any]:
     """
     Execute a sequence of tools from structured tool call objects.
 
     Parameters:
         tool_calls: List of tool call objects (varied format)
-        parse_fn: A function to extract (name, arguments) from each call
-            e.g. parse_standard_tool_call, parse_openai_tool_call, parse_anthropic_tool_call
+        parse_fn: Either a string (e.g. "openai", "mcp") or a function to extract (name, arguments) from each call
 
     Returns:
-        List of results from each tool
+        List of results from each tool, including error messages if applicable
     """
-    parse_fn = parse_fn or parse_openai_tool_call
+    # Resolve parser
+    if isinstance(parse_fn, str):
+        if parse_fn not in PARSER_MAP:
+            return [{"error": f"Unknown parser '{parse_fn}'. Valid parsers: {list(PARSER_MAP.keys())}"}]
+        parse_fn = PARSER_MAP[parse_fn]
+    elif parse_fn is None:
+        parse_fn = PARSER_MAP["mcp"]
 
     # Build a local tool registry at runtime
     callable_registry = {}
@@ -141,14 +132,20 @@ def run(tool_calls: List[Dict[str, Any]], parse_fn: Optional[Callable[[Dict], Tu
             callable_registry[name] = tool_def["callable"]
 
     results = []
-    for call in tool_calls:
-        name, args = parse_fn(call)
+    for i, call in enumerate(tool_calls):
+        try:
+            name, args = parse_fn(call)
+            if name not in callable_registry:
+                raise ValueError(f"Tool '{name}' not found in any extension.")
 
-        if name not in callable_registry:
-            raise ValueError(f"Tool '{name}' not found in any extension.")
+            fn = callable_registry[name]
+            result = fn(**args)
+            results.append(result)
 
-        fn = callable_registry[name]
-        results.append(fn(**args))
+        except Exception as e:
+            results.append({
+                "error": f"Tool call #{i + 1} failed: {str(e)}",
+                "call": call
+            })
 
     return results
-
