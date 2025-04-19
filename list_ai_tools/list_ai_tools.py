@@ -51,7 +51,7 @@ def list_ai_tools(extension_manager, schema: Optional[dict] = None, return_metad
                     if isinstance(tools, dict):
                         for tool_name, tool_info in tools.items():
                             if isinstance(tool_info, dict) and "callable" in tool_info:
-                                if tool_name in CALLABLE_REGISTRY:
+                                if tool_name in discovered_tools:
                                     raise ValueError(f"Duplicate tool name detected: '{tool_name}'")
 
                                 # Validate metadata against schema
@@ -99,7 +99,7 @@ PARSER_MAP = {
 
 # ---- Main tool execution logic ----
 
-def run(
+def run(extension_manager,
     tool_calls: List[Dict[str, Any]],
     parse_fn: Optional[str | Callable[[Dict], Tuple[str, Dict]]] = None
 ) -> List[Any]:
