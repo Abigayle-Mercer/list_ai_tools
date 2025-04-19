@@ -19,21 +19,10 @@ class ListExtensionsHandler(APIHandler):
 class ListToolInfoHandler(APIHandler):
     @tornado.web.authenticated
     async def get(self):
-        raw_tools = list_ai_tools(self.serverapp.extension_manager)
-        safe_tools = {}
+        metadata_only = True  # Optionally make this dynamic from query param later
+        raw_tools = list_ai_tools(self.serverapp.extension_manager, return_metadata_only=metadata_only)
 
-        for ext in raw_tools:
-            if isinstance(ext, dict):
-                for tool_name, tool_info in ext.items():
-                    if isinstance(tool_info, dict):
-                        filtered_info = {
-                            k: v for k, v in tool_info.items() if k != "callable"
-                        }
-                        if tool_name not in safe_tools:
-                            safe_tools[tool_name] = filtered_info
-            elif isinstance(ext, list):
-                # Optional: handle if `tools()` returns a list
-                continue
+        # If metadata_only=True, raw_tools is already safe
+        self.finish(json.dumps({"discovered_tools": raw_tools}))
 
-        self.finish(json.dumps({"discovered_tools": safe_tools}))
 
