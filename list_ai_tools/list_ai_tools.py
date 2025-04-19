@@ -3,8 +3,14 @@ import json
 from typing import Any, Dict, Optional, List, Callable, Tuple
 import jsonschema
 
+
+# to do 
+
+# - https://jupyter-server.readthedocs.io/en/latest/developers/extensions.html#distributing-a-server-extension
+
+
 # Minimal schema compatible with OpenAI function calling and LangChain-style tools
-DEFAULT_TOOL_SCHEMA = {
+DEFAULT_TOOL_SCHEMA = { # this needs to be MCP 
     "type": "object",
     "patternProperties": {
         "^[a-zA-Z_][a-zA-Z0-9_]*$": {
@@ -26,14 +32,42 @@ DEFAULT_TOOL_SCHEMA = {
     }
 }
 
-# Flat registry: tool_name -> callable
-CALLABLE_REGISTRY: Dict[str, Callable] = {}
+MCP_TOOL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "description": {"type": "string"},
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "type": {"type": "string", "enum": ["object"]},
+                "properties": {"type": "object"},
+                "required": {"type": "array", "items": {"type": "string"}}
+            },
+            "required": ["type", "properties"]
+        },
+        "annotations": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "readOnlyHint": {"type": "boolean"},
+                "destructiveHint": {"type": "boolean"},
+                "idempotentHint": {"type": "boolean"},
+                "openWorldHint": {"type": "boolean"}
+            },
+            "additionalProperties": True
+        }
+    },
+    "required": ["name", "inputSchema"],
+    "additionalProperties": False
+}
 
-def list_ai_tools(extension_manager, schema: Optional[dict] = None, return_metadata_only: bool = False
+
+
+def list_ai_tools(extension_manager, schema: Optional[dict] = None, return_metadata_only: bool = True
 ) -> List[Dict[str, Any]]:
     discovered_tools: List[Dict[str, Any]] = []
-    validation_schema = schema if schema is not None else DEFAULT_TOOL_SCHEMA
-    CALLABLE_REGISTRY.clear()
+    validation_schema = schema if schema is not None else MCP_TOOL_SCHEMA
 
     for ext_name in extension_manager.extensions:
         try:
@@ -48,9 +82,6 @@ def list_ai_tools(extension_manager, schema: Optional[dict] = None, return_metad
                                 if tool_name in CALLABLE_REGISTRY:
                                     raise ValueError(f"Duplicate tool name detected: '{tool_name}'")
 
-                                # Register callable
-                                CALLABLE_REGISTRY[tool_name] = tool_info["callable"]
-
                                 # Validate metadata against schema
                                 jsonschema.validate(instance=tool_info["metadata"], schema=validation_schema)
 
@@ -60,9 +91,9 @@ def list_ai_tools(extension_manager, schema: Optional[dict] = None, return_metad
                                     discovered_tools.append({tool_name: tool_info})
 
         except jsonschema.ValidationError as ve:
-            discovered_tools.append({"error": f"Schema validation failed in '{ext_name}': {ve.message}"})
+            print({"error": f"Schema validation failed in '{ext_name}': {ve.message}"})
         except Exception as e:
-            discovered_tools.append({"error": f"Error loading extension '{ext_name}': {str(e)}"})
+            print({"error": f"Error loading extension '{ext_name}': {str(e)}"})
 
     return discovered_tools
 
@@ -77,8 +108,11 @@ def parse_openai_tool_call(call: Dict) -> Tuple[str, Dict]:
     arguments = json.loads(fn.get("arguments", "{}"))
     return name, arguments
 
-def parse_anthropic_tool_call(call: Dict) -> Tuple[str, Dict]:
+def parse_anthropic_tool_call(call: Dict) -> Tuple[str, Dict]: 
     return call.get("name"), call.get("input", {})
+
+
+# keep writing these for popular LLMS 
 
 # ---- Main tool execution logic ----
 
@@ -94,22 +128,27 @@ def run(tool_calls: List[Dict[str, Any]], parse_fn: Optional[Callable[[Dict], Tu
     Returns:
         List of results from each tool
     """
+    parse_fn = parse_fn or parse_openai_tool_call
+
+    # Build a local tool registry at runtime
+    callable_registry = {}
+    tool_groups = list_ai_tools(
+        extension_manager,
+        return_metadata_only=False
+    )
+    for group in tool_groups:
+        for name, tool_def in group.items():
+            callable_registry[name] = tool_def["callable"]
+
     results = []
-    if parse_fn is None:
-        parse_fn = parse_standard_tool_call
-
     for call in tool_calls:
-        tool_name, tool_args = parse_fn(call)
+        name, args = parse_fn(call)
 
-        if not tool_name:
-            raise ValueError("Tool call did not include a valid 'name'.")
+        if name not in callable_registry:
+            raise ValueError(f"Tool '{name}' not found in any extension.")
 
-        try:
-            func = CALLABLE_REGISTRY[tool_name]
-        except KeyError:
-            raise ValueError(f"Tool '{tool_name}' not found in registry.")
-
-        results.append(func(**tool_args))
+        fn = callable_registry[name]
+        results.append(fn(**args))
 
     return results
 
