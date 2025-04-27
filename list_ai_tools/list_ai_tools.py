@@ -98,7 +98,7 @@ PARSER_MAP = {
 
 # ---- Main tool execution logic ----
 
-def run(extension_manager,
+async def run(extension_manager,
     tool_calls: List[Dict[str, Any]],
     parse_fn: Optional[str | Callable[[Dict], Tuple[str, Dict]]] = None
 ) -> List[Any]:
@@ -138,7 +138,10 @@ def run(extension_manager,
                 raise ValueError(f"Tool '{name}' not found in any extension.")
 
             fn = callable_registry[name]
-            result = fn(**args)
+            if asyncio.iscoroutinefunction(fn):
+                result = await fn(**args)
+            else:
+                result = fn(**args)
             results.append(result)
 
         except Exception as e:
