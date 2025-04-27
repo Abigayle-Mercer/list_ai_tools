@@ -2,6 +2,8 @@ import importlib
 import json
 from typing import Any, Dict, Optional, List, Callable, Tuple
 import jsonschema
+import asyncio
+
 
 
 MCP_TOOL_SCHEMA = {
@@ -119,6 +121,7 @@ async def run(extension_manager,
         parse_fn = PARSER_MAP[parse_fn]
     elif parse_fn is None:
         parse_fn = PARSER_MAP["mcp"]
+import asyncio
 
     # Build a local tool registry at runtime
     callable_registry = {}
