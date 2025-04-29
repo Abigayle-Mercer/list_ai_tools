@@ -102,7 +102,8 @@ PARSER_MAP = {
 
 async def run(extension_manager,
     tool_calls: List[Dict[str, Any]],
-    parse_fn: Optional[str | Callable[[Dict], Tuple[str, Dict]]] = None
+    parse_fn: Optional[str | Callable[[Dict], Tuple[str, Dict]]] = None,
+    schema: Optional[dict] = None
 ) -> List[Any]:
     """
     Execute a sequence of tools from structured tool call objects.
@@ -121,11 +122,14 @@ async def run(extension_manager,
         parse_fn = PARSER_MAP[parse_fn]
     elif parse_fn is None:
         parse_fn = PARSER_MAP["mcp"]
+    
+    validation_schema = schema if schema is not None else MCP_TOOL_SCHEMA
 
     # Build a local tool registry at runtime
     callable_registry = {}
     tool_groups = list_ai_tools(
         extension_manager,
+        schema = validation_schema,
         return_metadata_only=False
     )
     for group in tool_groups:
